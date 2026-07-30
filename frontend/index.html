@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OEE Platform v2.1</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    #expChartContainer.fullscreen {
+      position: fixed; inset: 0; z-index: 50;
+      background: #111827; padding: 1rem;
+      width: 100vw; height: 100vh; margin: 0;
+    }
+    #tab-explore { min-height: calc(100vh - 6rem); }
+    .chart-box { height: 400px; width: 100%; }
+    #expChartContainer { display: flex; flex-direction: column; min-height: 55vh; }
+    #expChart { flex: 1; min-height: 300px; width: 100%; }
+    #expChartContainer.fullscreen { min-height: 100vh; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-mono min-h-screen">
+
+  <header class="border-b border-gray-700 bg-gray-800 px-6 py-3">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <h1 class="text-lg font-bold tracking-wider text-green-400">OEE PLATFORM v2.1</h1>
+      <div class="flex items-center gap-2 text-xs">
+        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse" id="wsIndicator"></span>
+        <span class="text-gray-400" id="wsStatus">Bağlanıyor...</span>
+      </div>
+    </div>
+    <nav class="flex gap-6 text-sm mt-2" id="tabBar">
+      <button class="tab-btn pb-2 border-b-2 border-green-400 text-green-400 font-semibold" data-tab="live">CANLI İZLEME</button>
+      <button class="tab-btn pb-2 border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-tab="explore">VERİ KEŞFİ</button>
+      <button class="tab-btn pb-2 border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-tab="reports">RAPORLAR</button>
+      <button class="tab-btn pb-2 border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-tab="export">İHRACAT</button>
+    </nav>
+  </header>
+
+  <main class="max-w-7xl mx-auto p-4">
+
+    <!-- TAB 1: LIVE -->
+    <section id="tab-live" class="tab-content">
+      <div id="machineGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4"></div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded p-3 border border-gray-700"><div id="oeeChart" class="chart-box"></div></div>
+        <div class="bg-gray-800 rounded p-3 border border-gray-700"><div id="tempChart" class="chart-box"></div></div>
+      </div>
+    </section>
+
+    <!-- TAB 2: EXPLORE -->
+    <section id="tab-explore" class="tab-content hidden flex flex-col">
+      <div class="flex items-center gap-2 mb-2 text-xs">
+        <button id="expFilterToggle" class="bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-xs"><span id="expFilterIcon">▶</span> FİLTRELER</button>
+        <button id="expFullscreenBtn" class="bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-xs" title="Tam Ekran">⛶</button>
+        <span class="text-gray-500 ml-auto" id="expStatus"></span>
+      </div>
+      <div id="expFilterPanel" class="bg-gray-800 rounded p-3 border border-gray-700 mb-2 hidden">
+        <div class="flex flex-wrap gap-1 mb-2" id="expPresets">
+          <button class="preset-btn bg-green-800 hover:bg-green-700 px-3 py-1 rounded text-xs active" data-range="1h">Son 1 Saat</button>
+          <button class="preset-btn bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs" data-range="6h">Son 6 Saat</button>
+          <button class="preset-btn bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs" data-range="24h">24 Saat</button>
+          <button class="preset-btn bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs" data-range="today">Bugün</button>
+          <button class="preset-btn bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs" data-range="7d">7 Gün</button>
+          <button class="preset-btn bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs" data-range="30d">30 Gün</button>
+          <input type="text" id="expFrom" class="datepicker bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs w-28" placeholder="Başlangıç">
+          <input type="text" id="expTo" class="datepicker bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs w-28" placeholder="Bitiş">
+        </div>
+        <div class="flex flex-wrap gap-4 items-center text-xs">
+          <div class="flex gap-2 items-center">
+            <span class="text-gray-400">Makine:</span>
+            <label><input type="checkbox" class="exp-mach" value="M-01-Torna" checked>Torna</label>
+            <label><input type="checkbox" class="exp-mach" value="M-02-Pres" checked>Pres</label>
+            <label><input type="checkbox" class="exp-mach" value="M-03-CNC" checked>CNC</label>
+          </div>
+          <div class="flex gap-2 items-center">
+            <span class="text-gray-400">Çözünürlük:</span>
+            <select id="expGranularity" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs">
+              <option value="1m">1 dk</option>
+              <option value="5m">5 dk</option>
+              <option value="15m">15 dk</option>
+              <option value="1h" selected>Saat</option>
+              <option value="4h">4 Saat</option>
+              <option value="1d">Gün</option>
+            </select>
+          </div>
+          <div class="flex gap-2 items-center">
+            <span class="text-gray-400">Grafik:</span>
+            <select id="expChartType" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs">
+              <option value="line">Çizgi</option>
+              <option value="bar">Bar</option>
+            </select>
+          </div>
+          <button id="expLoadBtn" class="bg-green-700 hover:bg-green-600 px-3 py-1 rounded text-xs font-bold">SORGULA</button>
+        </div>
+        <div class="flex flex-wrap gap-3 mt-2 text-xs">
+          <span class="text-gray-400">Metrikler:</span>
+          <label><input type="checkbox" class="exp-metric" value="oee" checked> OEE</label>
+          <label><input type="checkbox" class="exp-metric" value="availability" checked> Kullanılabilirlik</label>
+          <label><input type="checkbox" class="exp-metric" value="performance" checked> Performans</label>
+          <label><input type="checkbox" class="exp-metric" value="quality"> Kalite</label>
+          <label><input type="checkbox" class="exp-metric" value="temperature"> Sıcaklık</label>
+          <label><input type="checkbox" class="exp-metric" value="vibration"> Titreşim</label>
+          <label><input type="checkbox" class="exp-metric" value="pressure"> Basınç</label>
+          <label><input type="checkbox" class="exp-metric" value="produced_qty"> Üretim</label>
+          <label><input type="checkbox" class="exp-metric" value="defective_qty"> Kusur</label>
+        </div>
+      </div>
+      <div id="expError" class="hidden text-red-400 text-xs bg-red-900/20 border border-red-800 rounded p-2 mb-2"></div>
+      <div id="expChartContainer" class="flex-1 bg-gray-800 rounded p-3 border border-gray-700 mb-2 relative min-h-[40vh]">
+        <div id="expChart"></div>
+      </div>
+      <div class="bg-gray-800 rounded border border-gray-700">
+        <button id="expTableToggle" class="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-400 hover:text-white"><span id="expTableIcon">▼</span> VERİ TABLOSU</button>
+        <div id="expTableWrap" class="overflow-x-auto max-h-64 overflow-y-auto border-t border-gray-700">
+          <table class="w-full text-xs" id="expTable"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: REPORTS -->
+    <section id="tab-reports" class="tab-content hidden">
+      <div class="bg-gray-800 rounded p-3 border border-gray-700 mb-3">
+        <div class="flex flex-wrap gap-1 mb-2" id="rptPresets">
+          <button class="rpt-preset bg-green-800 hover:bg-green-700 px-3 py-1 rounded text-xs active" data-range="today">Bugün</button>
+          <button class="rpt-preset bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs" data-range="yesterday">Dün</button>
+          <button class="rpt-preset bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs" data-range="7d">7 Gün</button>
+          <button class="rpt-preset bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs" data-range="30d">30 Gün</button>
+          <input type="text" id="rptFrom" class="datepicker bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs w-28" placeholder="Başlangıç">
+          <input type="text" id="rptTo" class="datepicker bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs w-28" placeholder="Bitiş">
+        </div>
+        <div class="flex gap-3 items-center text-xs">
+          <span class="text-gray-400">Makine:</span>
+          <label><input type="checkbox" class="rpt-mach" value="M-01-Torna" checked>Torna</label>
+          <label><input type="checkbox" class="rpt-mach" value="M-02-Pres" checked>Pres</label>
+          <label><input type="checkbox" class="rpt-mach" value="M-03-CNC" checked>CNC</label>
+          <button id="rptLoadBtn" class="bg-blue-700 hover:bg-blue-600 px-3 py-1 rounded text-xs font-bold">YENİLE</button>
+        </div>
+      </div>
+      <div id="rptError" class="hidden text-red-400 text-xs bg-red-900/20 border border-red-800 rounded p-2 mb-2"></div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3" id="rptCards"></div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div class="bg-gray-800 rounded p-3 border border-gray-700"><div id="rptOeeChart" class="chart-box"></div></div>
+        <div class="bg-gray-800 rounded p-3 border border-gray-700 relative"><div id="rptPieChart" class="chart-box"></div></div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
+        <div class="bg-gray-800 rounded p-3 border border-gray-700"><div id="rptProdChart" class="chart-box"></div></div>
+        <div class="bg-gray-800 rounded p-3 border border-gray-700">
+          <h3 class="text-xs text-gray-400 mb-2">En Sık Hata Kodları</h3>
+          <div id="rptTopErrors" class="text-xs"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: EXPORT -->
+    <section id="tab-export" class="tab-content hidden">
+      <div class="bg-gray-800 rounded p-4 border border-gray-700 max-w-md">
+        <h2 class="text-sm font-semibold mb-3">Veri İhracatı</h2>
+        <div class="mb-2 text-xs">
+          <span class="text-gray-400">Format:</span>
+          <label class="ml-2"><input type="radio" name="expFmt" value="csv" checked> CSV</label>
+          <label class="ml-2"><input type="radio" name="expFmt" value="json"> JSON</label>
+        </div>
+        <div class="mb-2 text-xs">
+          <span class="text-gray-400">Makine:</span>
+          <select id="expMachSel" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 ml-2">
+            <option value="">Tümü</option>
+            <option value="M-01-Torna">Torna</option>
+            <option value="M-02-Pres">Pres</option>
+            <option value="M-03-CNC">CNC</option>
+          </select>
+        </div>
+        <div class="flex gap-2 mb-3 text-xs">
+          <div><span class="text-gray-400">Başlangıç:</span><input type="text" id="expFromDate" class="datepicker bg-gray-700 border border-gray-600 rounded px-2 py-1 ml-1 w-28"></div>
+          <div><span class="text-gray-400">Bitiş:</span><input type="text" id="expToDate" class="datepicker bg-gray-700 border border-gray-600 rounded px-2 py-1 ml-1 w-28"></div>
+        </div>
+        <button id="expDownloadBtn" class="bg-green-700 hover:bg-green-600 px-4 py-2 rounded text-xs w-full font-bold">İNDİR</button>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

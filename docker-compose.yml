@@ -1,0 +1,65 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: oee-db
+    environment:
+      POSTGRES_USER: oee_user
+      POSTGRES_PASSWORD: oee_pass
+      POSTGRES_DB: oee_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - oee-db-data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - oee-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oee_user -d oee_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: oee-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: timescaledb
+      DB_PORT: 5432
+      DB_USER: oee_user
+      DB_PASSWORD: oee_pass
+      DB_NAME: oee_db
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - oee-network
+
+  simulator:
+    build: ./simulator
+    container_name: oee-simulator
+    environment:
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - oee-network
+
+  frontend:
+    build: ./frontend
+    container_name: oee-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - oee-network
+
+volumes:
+  oee-db-data:
+
+networks:
+  oee-network:
+    driver: bridge
