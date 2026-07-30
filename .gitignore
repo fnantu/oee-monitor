@@ -10,3 +10,4 @@ venv/
 *.swp
 *.swo
 .tmp/
+PROJECT_ARCHITECTURE.md
